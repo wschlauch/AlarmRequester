@@ -1,0 +1,3 @@
+org\bitsea\AlarmRequester\Requester.class
+org\bitsea\AlarmRequester\PatientInformation.class
+org\bitsea\AlarmRequester\rest\GeneralQueries.class

@@ -1,0 +1,36 @@
+# Alarme / Kategorie (Patient, Station)
+- Pro Patient: select alarm, kategorie from alarms where patid = ...
+- ?
+
+
+# Situationen in der Alarme wie [] auftraten (Patient, Station)
+?
+
+Wurde die Therapie angepasst und wenn ja, von was auf was? (Patient, Station)
+- wenn patient_standard_value is changed
+
+
+Zeige gleichzeitige Alarme pro Patient (Patient, Station)
+- Alarmmessage pro patient
+
+Zeige gleichzeitige Alarme pro Station
+- select alarme from alarmmessage where time = time and patid in (select patid from station_bed_patient where station = ...)
+
+Dauer bis zur Quittierung (Patient, Station)
+??
+
+Alarme und Dauer bis zur Normalisierung (Patient, Station)
+Wenn richtig in Erinnerung, dann nur wenn standardwerte umgestellt wurden. Timestamps dazwischen und normal oder zwischen Alarmnachricht und normal, minimum davon
+
+
+Wo wurde der Alarme quittiert (?)
+????
+
+Anzahl der Alarme während Stummschaltung (Patient, Station)
+????
+
+Implausible Aarme (Patient, Station)
+???? Zahlenwerte völlig falsch und nicht nur ein wenig (mehr als 20% Abweichung?)
+
+Wurde nach einem Alarm ein Wert umgestellt? (Patient)
+get latest alarms with timestamp; get latest patient_standard_values timestamp; if changed ...
