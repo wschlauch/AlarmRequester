@@ -34,3 +34,6 @@ Implausible Aarme (Patient, Station)
 
 Wurde nach einem Alarm ein Wert umgestellt? (Patient)
 get latest alarms with timestamp; get latest patient_standard_values timestamp; if changed ...
+
+
+duckduck
