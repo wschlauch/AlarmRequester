@@ -25,17 +25,32 @@ public class GeneralQueries extends RouteBuilder {
 			.to("bean:PatientInformation?method=alarmsAfterTimestamp(${header.id}, ${header.dt})")
 			.get("/alarms/before/{dt}")
 			.to("bean:PatientInformation?method=alarmsBeforeTimestamp(${header.id}, ${header.dt})")
-//			.get("/therapychange")
-//			
-//			.get("/simultaneousAlarms")
-//			
+			.get("/alarms/{filteredBy}")
+			.to("bean:PatientInformation?method=alarms(${header.id}, ${header.filteredBy})")
+			.get("/therapychange")
+			.to("bean:PatientInformation?method=changedTherapy(${header.id})")
+			.get("/simultaneousAlarms")
+			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id})")
+			.get("/simultaneousAlarms/{time}/{key}")
+			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id}, ${header.time}, ${header.key})")
+			.get("/simultaneousAlarms/{time}")
+			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id}, ${header.time})")
 //			.get("/timeToAlarmAck")
 //			
-//			.get("/numberUntilNormalized")
-//			
+			.get("/timeUntilNormalized")
+			.to("bean:PatientInformation?method=timeBetweenNormal(${header.id})")
+			.get("/timeUntilNormalized/around/{dt}")
+			.to("bean:PatientInformation?method=timeBetweenNormal(${header.id}, null, ${header.dt})")
+			.get("/timeUntilNormalized/{alarmtype}")
+			.to("bean:PatientInformation?method=timeBetweenNormal(${header.id}, ${header.alarmtype})")
+			.get("/timeUntilNormalized/{alarmtype}/{timepoint}")
+			.to("bean:PatientInformation?method=timeBetweenNormal(${header.id}, ${header.alarmtype}, ${header.timepoint})")
 //			.get("/implausibleAlarms")
 //			
-//			.get("/changeAfterAlarm")
+			.get("/changeAfterAlarm")
+			.to("bean:PatientInformation?method=changeAfterAlarm(${header.id})")
+			.get("/changeAfterAlarm/{ts}")
+			.to("bean:PatientInformation?method=changeAfterAlarm(${header.id}, ${header.ts})")
 			;
 			
 	}
