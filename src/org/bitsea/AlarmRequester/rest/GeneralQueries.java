@@ -1,10 +1,7 @@
 package org.bitsea.AlarmRequester.rest;
 
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.rest.RestBindingMode;
-import org.apache.camel.model.rest.RestParamType;
 
 
 public class GeneralQueries extends RouteBuilder {
@@ -19,6 +16,7 @@ public class GeneralQueries extends RouteBuilder {
 		
 		rest("/patient/{id}")
 			.consumes("text/plain").produces("text/plain")
+			
 			.get("/alarms") //.outType(classType)  // add some nice out type?
 			.to("bean:PatientInformation?method=alarms(${header.id})")
 			.get("/alarms/after/{dt}")
@@ -52,7 +50,35 @@ public class GeneralQueries extends RouteBuilder {
 			.get("/changeAfterAlarm/{ts}")
 			.to("bean:PatientInformation?method=changeAfterAlarm(${header.id}, ${header.ts})")
 			;
+		
+		// interesting information on stations should always include
+		// number, mean, std, min, max
+					
+		rest("/station/{stationID}")
+			.consumes("text/plain").produces("text/plain")
+			.get("/alarms") //.outType(classType)  // add some nice out type?
+			.to("bean:StationInformation?method=alarms(${header.stationID})")
+			.get("/alarms/{time}")
+			.to("bean:StationInformation?method=alarms(${header.stationID}, ${header.time})")
+			.get("/alarms/type/{type}")
+			.to("bean:StationInformation?method=alarms(${header.stationID}, null, ${header.type})")
 			
+			// all alarms
+			// summary on alarms (i.e. means, stds, graphical distribution?)
+
+			// simultaneous alarms (generell, letzten, means, stds, häufigster gleichzeitiger?)
+			// generelle Dauer bis zur Quittierung auf einer Station
+			// letzte Dauer bis zur Quittierung auf einer Station
+			// stds, means bis zur Quittierung
+			// avg zeit bis zur Normalerisierung, std, max, min
+			// ??????
+		;
+		
+		rest("{who}/{id}")
+		.consumes("text/plain").produces("text/html")
+		.get("/averageAlarms")
+		.to("bean:AverageQueries?method=alarmsAverage(${header.who}, ${header.id}, null, null)")
+		;
 	}
 
 }

@@ -17,7 +17,9 @@ public class Requester {
 		main = new Main();
 		main.enableHangupSupport();
 		main.bind("PatientInformation", new PatientInformation());
-		main.addRouteBuilder(new GeneralQueries());;
+		main.bind("StationInformation", new StationInformation());
+		main.bind("AverageQueries", new AverageQueries());
+		main.addRouteBuilder(new GeneralQueries());
 		main.run();
 	}
 }
