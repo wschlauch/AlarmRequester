@@ -27,12 +27,12 @@ public class GeneralQueries extends RouteBuilder {
 			.to("bean:PatientInformation?method=alarms(${header.id}, ${header.filteredBy})")
 			.get("/therapychange")
 			.to("bean:PatientInformation?method=changedTherapy(${header.id})")
-			.get("/simultaneousAlarms")
-			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id})")
-			.get("/simultaneousAlarms/{time}/{key}")
-			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id}, ${header.time}, ${header.key})")
-			.get("/simultaneousAlarms/{time}")
-			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id}, ${header.time})")
+//			.get("/simultaneousAlarms")
+//			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id})")
+//			.get("/simultaneousAlarms/{time}/{key}")
+//			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id}, ${header.time}, ${header.key})")
+//			.get("/simultaneousAlarms/{time}")
+//			.to("bean:PatientInformation?method=simultaneousAlarms(${header.id}, ${header.time})")
 //			.get("/timeToAlarmAck")
 //			
 			.get("/timeUntilNormalized")
@@ -62,22 +62,26 @@ public class GeneralQueries extends RouteBuilder {
 			.to("bean:StationInformation?method=alarms(${header.stationID}, ${header.time})")
 			.get("/alarms/type/{type}")
 			.to("bean:StationInformation?method=alarms(${header.stationID}, null, ${header.type})")
-			
-			// all alarms
-			// summary on alarms (i.e. means, stds, graphical distribution?)
-
-			// simultaneous alarms (generell, letzten, means, stds, häufigster gleichzeitiger?)
-			// generelle Dauer bis zur Quittierung auf einer Station
-			// letzte Dauer bis zur Quittierung auf einer Station
-			// stds, means bis zur Quittierung
-			// avg zeit bis zur Normalerisierung, std, max, min
-			// ??????
 		;
 		
 		rest("{who}/{id}")
-		.consumes("text/plain").produces("text/html")
-		.get("/averageAlarms")
-		.to("bean:AverageQueries?method=alarmsAverage(${header.who}, ${header.id}, null, null)")
+			.consumes("text/plain").produces("text/html")
+			.get("/averageAlarms")
+			.to("bean:AverageQueries?method=alarmsAverage(${header.who}, ${header.id}, null, null)")
+			.get("/averageAlarms/{code1}")
+			.to("bean:AverageQueries?method=alarmsAverage(${header.who}, ${header.id}, ${header.code1}, null)")
+			.get("/averageAlarms/{code1}/{code2}")
+			.to("bean:AverageQueries?method=alarmsAverage(${header.who}, ${header.id}, ${header.code1}, ${header.code2})")
+			.get("/simultaneousAlarms")
+			.to("bean:AverageQueries?method=simultaneousAlarms(${header.who}, ${header.id}, null, null)")
+			.get("/simultaneousAlarms/{time}")
+			.to("bean:AverageQueries?method=simultaneousAlarms(${header.who}, ${header.id}, ${header.time}, null)")
+			.get("/simultaneousAlarms/{time}/{span}")
+			.to("bean:AverageQueries?method=simultaneousAlarms(${header.who}, ${header.id}, ${header.time}, ${header.span})")
+			.get("/closeness")
+			.to("bean:AverageQueries?method=closenessByTime(${header.who}, ${header.id}, null)")
+			.get("/closeness/{alarmType}")
+			.to("bean:AverageQueries?method=closenessByTime(${header.who}, ${header.id}, ${header.alarmType})")
 		;
 	}
 
