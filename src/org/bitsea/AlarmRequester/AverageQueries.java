@@ -3,9 +3,7 @@ package org.bitsea.AlarmRequester;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -16,11 +14,13 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.bitsea.AlarmRequester.utils.AlarmDuration;
+import org.bitsea.AlarmRequester.utils.TransformationUtil;
 import org.springframework.stereotype.Component;
 
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
+import com.datastax.driver.core.TupleValue;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Select.Where;
 
@@ -80,6 +80,8 @@ public class AverageQueries {
 		}
 		return patientIds;
 	}
+	
+	
 	/*
 	 * average number of alarms
 	 * patient: per message
@@ -226,7 +228,7 @@ public class AverageQueries {
 	 */	
 	private static List<AlarmDuration> continousAlarm(int id, ResultSet info) {
 		
-		HashMap<Long, Set> theoreticallySorted = new HashMap<Long, Set>();
+		HashMap<Long, Set<String>> theoreticallySorted = new HashMap<Long, Set<String>>();
 //		for (Row r : info) {
 //			theoreticallySorted.put(r.getLong("sendTime"), r.getSet("reason", String.class));
 //		}
@@ -267,21 +269,6 @@ public class AverageQueries {
 		return done;
 	}
 	
-	/*
-	 * input: (((a, t1, t2), (b, t1, t2), ..), ((a, t2, t3), (b, t2, t3), ..), ..)
-	 * output {a: ([t1, t2], [t2, t3], ..), b: ([..], ..), ..}
-	 */
-	private static HashMap<String, List<long[]>> transformCloseness(List<List<AlarmDuration>> data) {
-		HashMap<String, List<long[]>> resulting = new HashMap<String, List<long[]>>();
-		for(List<AlarmDuration> sublist : data) {
-			sublist.forEach(tuple -> {
-				List<long[]> tmp = resulting.getOrDefault(tuple.getKey(), new LinkedList<long[]>());
-				tmp.add(tuple.getValues());
-				resulting.put(tuple.getKey(), tmp);
-			});
-		}
-		return resulting;
-	}
 	
 	/*
 	 * gets the average, minimum and maximum time between alarms on either a station
@@ -318,13 +305,13 @@ public class AverageQueries {
 		// minDuration = 5s
 		
 		// transform
-		HashMap<String, List<long[]>> transformedData = transformCloseness(completeList);
+		HashMap<String, List<long[]>> transformedData = TransformationUtil.transformCloseness(completeList);
 		// apply
 		HashMap<String, double[]> results = apply(transformedData, typeOfAlarm);
 		// format
 		for (Entry<String, double[]> e : results.entrySet()) {
 			double [] r = e.getValue();
-			String tmp = MessageFormat.format("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr>", r[0], r[1], r[2], r[3], r[4], r[5]);
+			String tmp = MessageFormat.format("<tr><td>{6}</td><td>{0} +/- {1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr>", r[0], r[1], r[2], r[3], r[4], r[5], e.getKey());
 			answer += tmp;
 		}
 		return answer + "</table>";
@@ -347,10 +334,10 @@ public class AverageQueries {
 			double tmp[] = new double[6];
 			tmp[0] = calculateMean(completeList);
 			tmp[1] = calculateDeviation(completeList, tmp[0]);
-			tmp[2] = getMinimum(toReturn.values(), 2);
-			tmp[3] = getMaximum(toReturn.values(), 3);
-			tmp[4] = getMinimum(toReturn.values(), 4);
-			tmp[5] = getMaximum(toReturn.values(), 5);
+			tmp[2] = TransformationUtil.getMinimum(toReturn.values(), 2);
+			tmp[3] = TransformationUtil.getMaximum(toReturn.values(), 3);
+			tmp[4] = TransformationUtil.getMinimum(toReturn.values(), 4);
+			tmp[5] = TransformationUtil.getMaximum(toReturn.values(), 5);
 			toReturn.put("all", tmp);		
 		}
 		
@@ -366,55 +353,75 @@ public class AverageQueries {
 		tmp[1] = calculateDeviation(mapped, tmp[0]);
 		tmp[2] = Collections.min(mapped);
 		tmp[3] = Collections.max(mapped);
-		tmp[4] = delta(tldr, "min");
-		tmp[5] = delta(tldr, "max");
+		tmp[4] = TransformationUtil.delta(tldr, "min");
+		tmp[5] = TransformationUtil.delta(tldr, "max");
 
 		return tmp;
 	}
 
 
-	private static double getMinimum(Collection<double[]> collection, int index) {
-		double currentMinimum = Double.MAX_VALUE;
-		for (double[] tmp : collection) {
-			if (tmp[index] < currentMinimum) {
-				currentMinimum = tmp[index];
-			}
+	public static String implausibleAlarms(String patOrStat, int id) {
+		Where stmt;
+		Where stmt2;
+		if (patOrStat.equalsIgnoreCase("patient")) {
+			stmt = QueryBuilder.select().column("numeric").column("patid").from("oru_messages")
+					.where(QueryBuilder.eq("patid", id));
+			stmt2 = QueryBuilder.select().all().from("patient_standard_values")
+					.where(QueryBuilder.eq("patid", id));
+		} else {
+			List<Integer> patients = getPatientsFromStation(id, null);
+			stmt = QueryBuilder.select().column("numeric").column("patid").from("oru_messages")
+					.where(QueryBuilder.in("patid", patients));
+			stmt2 = QueryBuilder.select().all().from("patient_standard_values")
+					.where(QueryBuilder.in("patid", patients));
 		}
-		return currentMinimum;
-	}
-
-	private static double getMaximum(Collection<double[]> toRet, int index) {
-		double currentMax = Double.MIN_VALUE;
-		for (double[] tmp : toRet) {
-			if (tmp[index] > currentMax) {
-				currentMax = tmp[index];
-			}
-		}
-		return currentMax;
-	}
-
-	private static double delta(List<long[]> value, String minOrMax) {
-		double returnValue = 0.0;
-		if (minOrMax.equals("min")) {
-			returnValue = Double.MAX_VALUE;
-			for (int i=0; i<value.size() - 1; i++) {
-				long possibleM = value.get(i+1)[1] - value.get(i)[0];
-				if (possibleM < returnValue && possibleM > 1) {
-					returnValue = possibleM;
+		
+		// got all the information, i.e. measurements as well as borders
+		// for each patient from station check the standard values against
+		// the measurement. If more than 50% too high/low -> implausible alarm
+		// thus, generically build a mapping {patid : {border1:(a,b), border2:(a,b),  ..}, ..}
+		ResultSet rs = session.execute(stmt2);
+		HashMap<Integer, Map<String, TupleValue>> patBorders = composeStandardValues(rs);
+		HashMap<String, Integer> overshot = new HashMap<String, Integer>();
+		HashMap<String, Integer> within = new HashMap<String, Integer>();
+		HashMap<String, Integer> alarm = new HashMap<String, Integer>();
+		Set<String> reasons = new HashSet<String>();
+		rs = session.execute(stmt);
+		for (Row row : rs) {
+			int patid = row.getInt("patid");
+			Map<String, TupleValue> mapping = patBorders.get(patid);
+			Map<String, TupleValue> data = row.getMap("numeric", String.class, TupleValue.class);
+			for (Entry<String, TupleValue> tpl : data.entrySet()) {
+				TupleValue borders = mapping.get(tpl.getKey());
+				float toCompare = tpl.getValue().getFloat(0);
+				if (borders == null) {continue;}
+				if (toCompare <= 0.5*borders.getFloat(0) || toCompare >= 1.5*borders.getFloat(1)) {
+					overshot.compute(tpl.getKey(), (k, v) -> v == null ? 1 : v+1);
+				} else if (toCompare <= borders.getFloat(1) && toCompare >= borders.getFloat(0)) {
+					within.compute(tpl.getKey(), (k, v) -> v == null ? 1 : v+1);
+				} else {
+					alarm.compute(tpl.getKey(), (k, v) -> v==null? 1 : v+1);
 				}
 			}
-		} else if (minOrMax.equals("max")) {
-			returnValue = Double.MIN_VALUE;
-			for (int i=0; i<value.size() - 1; i++) {
-				long possibleM = value.get(i+1)[1] - value.get(i)[0];
-				if (possibleM > returnValue) {
-					returnValue = possibleM;
-				}
-			}
 		}
-		if (returnValue == Double.MAX_VALUE || returnValue == Double.MIN_VALUE) {
-			returnValue = 0.0;
+		
+		// now to display
+		String answer = "<table><tr><td>Alarm</td><td>Within Borders</td><td>Alarm</td><td>Implausible</td></tr>";
+		for (String reason : reasons) {
+			answer += MessageFormat.format("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td></tr>", 
+					reason, within.get(reason), alarm.get(reason), overshot.get(reason));
 		}
-		return returnValue;
+		return answer + "</table>";
+	}
+
+
+	private static HashMap<Integer, Map<String, TupleValue>> composeStandardValues(ResultSet rs) {
+		HashMap<Integer, Map<String,TupleValue>> pBorders = new HashMap<Integer, Map<String,TupleValue>>();
+		for (Row row : rs) {
+			Integer patID = row.getInt("patid");
+			Map<String, TupleValue> params = row.getMap("parameters", String.class, TupleValue.class);
+			pBorders.put(patID, params);
+		}
+		return pBorders;
 	}
 }

@@ -22,12 +22,12 @@ Wo wurde der Alarme quittiert (?)
 ????
 
 
-Anzahl der Alarme während Stummschaltung (Patient, Station)
+Anzahl der Alarme wï¿½hrend Stummschaltung (Patient, Station)
 ????
 
 
 Implausible Aarme (Patient, Station)
-???? Zahlenwerte völlig falsch und nicht nur ein wenig (mehr als 20% Abweichung?)
+???? Zahlenwerte vï¿½llig falsch und nicht nur ein wenig (mehr als 20% Abweichung?)
 
 
 Wurde nach einem Alarm ein Wert umgestellt? (Patient)
@@ -45,7 +45,7 @@ spezielle Dauer bis zur Quittierung				--?
 Alarme bis zur Normalisierung					--check
 Dauer bis zur Normalisierung					--check
 Wo wurden Alarme quittiert						--?
-Anzahl Alarme während der Stummschaltung		--?
+Anzahl Alarme wï¿½hrend der Stummschaltung		--?
 Implausible Alarme								--?
 Wurde nach einem Alarm ein Wert umgestellt?		--check
 
@@ -54,10 +54,15 @@ Stationen:
 # Alarme/Kategorie								--check
 # Situationen									--?
 Therapieanpassungen								--
-Gleichzeitige Alarme							--
-Dauer bis zur Quittierung
-Alarme bis zur Normalisierung
-Dauer bis zur Normalisierung
-Wo werden Alarme quittiert
-Anzahl Alarme während Stummschaltung
-Implausible Alarme
+Gleichzeitige Alarme							--check
+Dauer bis zur Quittierung						--
+Alarme bis zur Normalisierung					--
+Dauer bis zur Normalisierung					--
+Wo werden Alarme quittiert						--
+Anzahl Alarme wï¿½hrend Stummschaltung			--
+
+Average/Max/Min:
+Alarme											--check
+gleichzeitge alarme								--check
+temporale NÃ¤he (zeitabstÃ¤nde definierbar)		--check
+Implausible Alarme								--check

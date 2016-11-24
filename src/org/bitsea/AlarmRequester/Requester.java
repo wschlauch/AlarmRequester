@@ -15,7 +15,7 @@ public class Requester {
 
 	public void boot() throws Exception {
 		main = new Main();
-		main.enableHangupSupport();
+//		main.enableHangupSupport();
 		main.bind("PatientInformation", new PatientInformation());
 		main.bind("StationInformation", new StationInformation());
 		main.bind("AverageQueries", new AverageQueries());
