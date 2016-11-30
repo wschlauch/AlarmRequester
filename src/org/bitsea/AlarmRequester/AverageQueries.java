@@ -4,6 +4,7 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.bitsea.AlarmRequester.utils.AlarmDuration;
@@ -22,6 +24,7 @@ import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.TupleValue;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
+import com.datastax.driver.core.querybuilder.Select;
 import com.datastax.driver.core.querybuilder.Select.Where;
 
 @Component
@@ -41,6 +44,18 @@ public class AverageQueries {
 	}
 	
 	
+	private static String getStation(int statID) {
+		Where stmt = QueryBuilder.select().column("stationName").from("station_name")
+				.where(QueryBuilder.eq("stationID", statID));
+		ResultSet rs = session.execute(stmt);
+		String idx = "";
+		if (!rs.isExhausted()) {
+			idx = rs.one().getString("stationName");
+		} 
+		return idx;
+	}
+	
+	
 	private static double calculateMean(List<Integer> ls) {
 		Integer sum = 0;
 		for (Integer item : ls) {
@@ -51,6 +66,7 @@ public class AverageQueries {
 		}
 		return 0.0;
 	}
+	
 	
 	private static double calculateDeviation(List<Integer> ls, Double mean) {
 		if (mean == null) {mean = calculateMean(ls);}
@@ -68,9 +84,10 @@ public class AverageQueries {
 	private static List<Integer> getPatientsFromStation(int StationID, Long time) {
 		time = time != null ? time : 0;
 		Where stmt;
-		stmt = QueryBuilder.select().column("patid")
-				.column("time").from("patient_bed_station")
-				.where(QueryBuilder.eq("station", StationID));
+		String statName = getStation(StationID);
+		stmt = QueryBuilder.select().column("patid").column("time")
+				.from("patient_bed_station").allowFiltering()
+				.where(QueryBuilder.eq("station", statName));
 		ResultSet rs = session.execute(stmt);
 		List<Integer> patientIds = new LinkedList<Integer>();
 		for (Row row : rs) {
@@ -194,15 +211,15 @@ public class AverageQueries {
 		
 		// for each timestamp, get simultaneous alarms (i.e. sum over array per person, average over all of these)
 		// do this with a mapping
-		HashMap<Long, Integer> timeOccMapping = new HashMap<Long, Integer>();
+		TreeMap<Long, Integer> timeOccMapping = new TreeMap<Long, Integer>();
 		for (Row r : results) {
 			long thisTime = r.getLong("sendTime");
 			Map<String, Integer> counter = r.getMap("severness_counter", String.class, Integer.class);
-			counter.forEach((key, value) -> {timeOccMapping.compute(thisTime, (k, v) -> v != null ? v + counter.get(key) : counter.get(key) );});			
+			counter.forEach((key, value) -> {timeOccMapping.compute(thisTime, (k, v) -> counter.containsKey(k) ? v + counter.get(key) : counter.get(key) );});			
 		}
 		
 		for (Entry<Long, Integer> e : timeOccMapping.entrySet()) {
-			answer += MessageFormat.format("<tr><td>{0}</td><td>{1}</td></tr>", e.getKey(), e.getValue());
+			answer += MessageFormat.format("<tr><td>{0}</td><td>{1}</td></tr>", new Date(e.getKey()), e.getValue());
 		}
 		answer += "</table>";
 		return answer;
@@ -424,4 +441,89 @@ public class AverageQueries {
 		}
 		return pBorders;
 	}
+
+	/*
+	 * get latest alarm (or alarm at timestamp) and try to discover if the changes occured
+	 * via therapeutic measures (i.e. change of borders, medicamentation, care)
+	 * for this, check whether there are newer patient_standard_values or whether the alarm
+	 * was stopped in a reasonable time frame
+	 * variables: timepoint at which the alarm occurred, standard last alarm
+	 * alarmtype, standard all
+	 * 
+	 * reasonable time frame not defined, thus take average time as 50%, each std. above lower, each std below higher
+	 */
+	public static void reactionToAlarm(String patOrStat, int id, Object o1, Object o2) {
+		// differentiate the optional Objects into their correct type
+		long time = -1L;
+		String alarmType = "";
+
+		if (o1 != null) {
+			if (o1 instanceof Long) {
+				time = (long) o1;
+			} else if (o1 instanceof String) {
+				alarmType = (String) o1;
+			}
+		}
+		if (o2 != null) {
+			if (o2 instanceof Long) {
+				time = (long) o2;
+			} else if (o2 instanceof String) {
+				alarmType = (String) o2;
+			}
+		}
+		
+		if (patOrStat.equalsIgnoreCase("patient")) {
+			
+		} else {
+			List<Integer> patients = getPatientsFromStation(id, time);
+			// do this for each patient separately and present results as average
+		}
+		
+		
+	}
+	
+	private void patientChangedTherapy(int patid, long time, String alarmType) {
+		// get latest alarm or end of alarm around time
+		Where stmt = QueryBuilder.select().column("").from("alarm_information")
+				.where(QueryBuilder.eq("patid", patid));
+		if (time != -1L) {
+			stmt.and(QueryBuilder.gt("sendTime", time)).limit(1);
+		} else {
+			stmt.and(QueryBuilder.lt("receivedTime", System.currentTimeMillis())).limit(1);
+		}
+		// get standard values around end and beginning of alarm
+		// calculate reaction time to alarm and compare against standard times
+		
+		// get all alarms for patient to identify mean time
+		stmt = QueryBuilder.select().column("sendTime").column("reason")
+				.from("alarm_information").where(QueryBuilder.eq("patid", patid));
+		ResultSet messages = session.execute(stmt);
+		// contains tuples (alarm, startTime, endTime)
+		List<AlarmDuration> alarmsOfPatient = continousAlarm(patid, messages);
+		HashMap<String, List<long[]>> resulting = new HashMap<String, List<long[]>>();
+		
+		// calc times in alarm state
+		alarmsOfPatient.forEach(tuple -> {
+			List<long[]> tmp = resulting.getOrDefault(tuple.getKey(), new LinkedList<long[]>());
+			tmp.add(tuple.getValues());
+			resulting.put(tuple.getKey(), tmp);
+		});
+		List<Integer> x = new ArrayList<Integer>();
+		resulting.forEach((k, v) -> {for(long[] q: v) {
+			x.add((int) (q[1] - q[0]));
+		};});
+		
+		double meanTme = calculateMean(x);
+		double stdTime = calculateDeviation(x, meanTme);
+		
+		// extract duration of alarm around time
+		// compare to average time
+		
+		// check whether std values have been updated in the meantime
+		
+		// if any of the two above apply, it is true
+		// return values?
+	}
+	
+
 }
