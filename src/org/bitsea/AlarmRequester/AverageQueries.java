@@ -14,18 +14,24 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import org.apache.commons.math3.distribution.NormalDistribution;
 import org.bitsea.AlarmRequester.utils.AlarmDuration;
 import org.bitsea.AlarmRequester.utils.TransformationUtil;
 import org.springframework.stereotype.Component;
 
+import com.datastax.driver.core.DataType;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
+import com.datastax.driver.core.TupleType;
 import com.datastax.driver.core.TupleValue;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
-import com.datastax.driver.core.querybuilder.Select;
 import com.datastax.driver.core.querybuilder.Select.Where;
+
+import io.netty.handler.codec.ByteToMessageDecoder.Cumulator;
 
 @Component
 public class AverageQueries {
@@ -471,31 +477,38 @@ public class AverageQueries {
 				alarmType = (String) o2;
 			}
 		}
-		
+		List<TupleValue> rslts = new ArrayList<TupleValue>();
 		if (patOrStat.equalsIgnoreCase("patient")) {
-			
+			rslts.add(patientChangedTherapy(id, time, alarmType));
 		} else {
 			List<Integer> patients = getPatientsFromStation(id, time);
-			// do this for each patient separately and present results as average
+			for (Integer pid: patients) {
+				rslts.add(patientChangedTherapy(pid, time, alarmType));
+			}
 		}
 		
 		
 	}
 	
-	private void patientChangedTherapy(int patid, long time, String alarmType) {
+	
+	/*
+	 * does actually belong in an extra class or in the patient class?
+	 * 
+	 */
+	private static TupleValue patientChangedTherapy(int patid, long time, String alarmType) {
 		// get latest alarm or end of alarm around time
-		Where stmt = QueryBuilder.select().column("").from("alarm_information")
-				.where(QueryBuilder.eq("patid", patid));
-		if (time != -1L) {
-			stmt.and(QueryBuilder.gt("sendTime", time)).limit(1);
-		} else {
-			stmt.and(QueryBuilder.lt("receivedTime", System.currentTimeMillis())).limit(1);
-		}
-		// get standard values around end and beginning of alarm
-		// calculate reaction time to alarm and compare against standard times
+//		Where stmt = QueryBuilder.select().column("").from("alarm_information")
+//				.where(QueryBuilder.eq("patid", patid));
+//		if (time != -1L) {
+//			stmt.and(QueryBuilder.gt("sendTime", time)).limit(1);
+//		} else {
+//			stmt.and(QueryBuilder.lt("receivedTime", System.currentTimeMillis())).limit(1);
+//		}
+		
+		
 		
 		// get all alarms for patient to identify mean time
-		stmt = QueryBuilder.select().column("sendTime").column("reason")
+		Where stmt = QueryBuilder.select().column("sendTime").column("reason")
 				.from("alarm_information").where(QueryBuilder.eq("patid", patid));
 		ResultSet messages = session.execute(stmt);
 		// contains tuples (alarm, startTime, endTime)
@@ -516,13 +529,66 @@ public class AverageQueries {
 		double meanTme = calculateMean(x);
 		double stdTime = calculateDeviation(x, meanTme);
 		
-		// extract duration of alarm around time
+		// select the alarms around the time given; if not time is given (-1L)
+		// select the longest last alarm
+		List<Long> durationInterstingStamps = new ArrayList<Long>();
+		List<Long> startTimes = new ArrayList<Long>();
+		if (time != -1) {
+			for ( List<long[]> tmp : resulting.values()) {
+				durationInterstingStamps.addAll(tmp.stream().filter(v -> v[0] < time && time < v[1]).map(new Function<long[], Long>() {
+					public Long apply(long[] v) {
+						return v[1] - v[0];
+					}
+				}).collect(Collectors.toList()));
+				startTimes.addAll(tmp.stream().filter(v -> v[0] < time && time < v[1]).map(new Function<long[], Long>() {
+					public Long apply(long[] v) {
+						return v[0];
+					}
+				}).collect(Collectors.toList()));
+			}
+		} else {
+			// if no time given, select from each group the alarm with the latest stamp
+			// not very elegant, check whether mapping and filtering makes this more elegant
+			for (List<long[]> tmp : resulting.values()) {
+				long[] max = new long[] {0L, 0L};
+				for (long[] e : tmp) {
+					if (e[1] > max[1]) { max = e;}
+				}
+				
+				durationInterstingStamps.add(max[1] - max[0]);
+				startTimes.add(max[0]);
+				//tmp.stream().map(new Function<long[], Long>() {public Long apply(long[] v) {return v[1];}}).max(Comparator.comparingLong(i -> i));
+			}
+		}
+		
+		
 		// compare to average time
+		// under the assumption that alarm times are normally distributed
+		long interestingTime = Collections.max(durationInterstingStamps);
+		double xn = Math.abs(interestingTime - meanTme) / stdTime;
+		NormalDistribution d = new NormalDistribution(meanTme, stdTime);
+		// resulting probability, one thing to return!
+		double result = d.cumulativeProbability(xn);
+		// check whether standard border values have been updated in the meantime
+		stmt = QueryBuilder.select().column("sendTime").from("patient_standard_values")
+				.where(QueryBuilder.eq("patid", patid)).and(QueryBuilder.gt("sendTime", time));
+		ResultSet rs = session.execute(stmt);
+		boolean changed = false;
+		long minStartTimes = Collections.min(startTimes); 
+		for (Row r: rs) {
+			long wasSendAt = r.getLong("sendTime");
+			if (wasSendAt > minStartTimes) {
+				changed = true;
+			}
+			
+		}
+		// if any of the two above apply, it is true that there was some action (pure assumption!)
+		TupleType transportType = session.getCluster().getMetadata().newTupleType(DataType.cdouble(), DataType.cboolean());
+		TupleValue toReturn = transportType.newValue();
+		toReturn.setDouble(0, result);
+		toReturn.setBool(1, changed);
+		return toReturn;
 		
-		// check whether std values have been updated in the meantime
-		
-		// if any of the two above apply, it is true
-		// return values?
 	}
 	
 
