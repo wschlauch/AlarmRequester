@@ -84,6 +84,12 @@ public class GeneralQueries extends RouteBuilder {
 			.to("bean:AverageQueries?method=closenessByTime(${header.who}, ${header.id}, ${header.alarmType})")
 			.get("/implausible")
 			.to("bean:AverageQueries?method=implausibleAlarms(${header.who}, ${header.id})")
+			.get("/therapy")
+			.to("bean:AverageQueries?method=reactionToAlarm(${header.who}, ${header.id}, null, null)")
+			.get("/therapy/{c1}")
+			.to("bean:AverageQueries?method=reactionToAlarm(${header.who}, ${header.id}, ${header.c1}, null)")
+			.get("/therapy/{c1}/{c2}")
+			.to("bean:AverageQueries?method=reactionToAlarm(${header.who}, ${header.id}, ${header.c1}, ${header.c2})")
 		;
 	}
 

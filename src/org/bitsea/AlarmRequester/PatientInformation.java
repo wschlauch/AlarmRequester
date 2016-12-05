@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.bitsea.AlarmRequester.CassandraConnector;
 import org.springframework.stereotype.Component;
@@ -154,20 +155,18 @@ public class PatientInformation {
 		ResultSet results = session.execute(getAllStandardValues);
 		String answer = "";
 		String current = "";
-		if (!results.isExhausted()) {
-			Row row = results.one();
-			current += extractParameters(row);
-			current += "\n";
-		}
-		
+		TreeMap<Long, String> hmp = new TreeMap<Long,String>();
 		if (!results.isExhausted()) {
 			while (!results.isExhausted()) {
 				Row row = results.one();
-				answer += extractParameters(row);
-				answer += "\n";
+				String containedParams = extractParameters(row);
+				hmp.put(row.getLong("sendtime"), containedParams);
 			}
 		}
-		current = "Current parameters: " + current;
+		current = hmp.get(hmp.lastKey()) + "\n";
+		for (Long key : hmp.descendingKeySet()) {
+			answer += hmp.get(key) + "\n";
+		}
 		if (!answer.isEmpty()){
 			current = current + "\nOld Parameters: " + answer;
 		}

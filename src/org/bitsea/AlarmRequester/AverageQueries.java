@@ -74,6 +74,29 @@ public class AverageQueries {
 	}
 	
 	
+	private static TupleValue calculateTuple(List<TupleValue> ls) {
+		int changes = 0;
+		double m = 0.0;
+		double s = 0.0;
+		for (TupleValue val : ls) {
+			m += val.getDouble(0);
+			changes += val.getBool(1) ? 1: 0;
+		}
+		m = m/ls.size();
+		for (TupleValue val : ls) {
+			s += Math.pow(val.getDouble(0) - m, 2); 
+		}
+		s = Math.sqrt(s/ls.size());
+		TupleType transportType = session.getCluster().getMetadata().newTupleType(DataType.cdouble(), 
+				DataType.cdouble(), DataType.cint());
+		TupleValue toReturn = transportType.newValue();
+		toReturn.setDouble(0, m);
+		toReturn.setDouble(1, s);
+		toReturn.setInt(2, changes);
+		return toReturn;
+		
+	}
+	
 	private static double calculateDeviation(List<Integer> ls, Double mean) {
 		if (mean == null) {mean = calculateMean(ls);}
 		double sum = 0.0;
@@ -458,7 +481,7 @@ public class AverageQueries {
 	 * 
 	 * reasonable time frame not defined, thus take average time as 50%, each std. above lower, each std below higher
 	 */
-	public static void reactionToAlarm(String patOrStat, int id, Object o1, Object o2) {
+	public static String reactionToAlarm(String patOrStat, int id, Object o1, Object o2) {
 		// differentiate the optional Objects into their correct type
 		long time = -1L;
 		String alarmType = "";
@@ -477,7 +500,9 @@ public class AverageQueries {
 				alarmType = (String) o2;
 			}
 		}
+		
 		List<TupleValue> rslts = new ArrayList<TupleValue>();
+		
 		if (patOrStat.equalsIgnoreCase("patient")) {
 			rslts.add(patientChangedTherapy(id, time, alarmType));
 		} else {
@@ -487,7 +512,14 @@ public class AverageQueries {
 			}
 		}
 		
-		
+		// currently, list of tuple value containing a) probability that someone reacted to alarm
+		// and whether the therapy was changed after alarm begin
+		// return the average probability of a reaction, standard deviation, how often did a change occur
+		String answer = "<table border=2><tr><td>Average probability</td><td>Std. deviation</td><td># changes</td></tr>";
+		TupleValue results = calculateTuple(rslts);
+		answer += "<tr><td>" + results.getDouble(0) + "</td><td>" + results.getDouble(1) + "</td><td>" + 
+				results.getInt(2) + " of " + rslts.size() + "</td></tr></table>";
+		return answer;		
 	}
 	
 	
@@ -565,10 +597,16 @@ public class AverageQueries {
 		// compare to average time
 		// under the assumption that alarm times are normally distributed
 		long interestingTime = Collections.max(durationInterstingStamps);
-		double xn = Math.abs(interestingTime - meanTme) / stdTime;
-		NormalDistribution d = new NormalDistribution(meanTme, stdTime);
-		// resulting probability, one thing to return!
-		double result = d.cumulativeProbability(xn);
+		double xn = stdTime > 0 ? Math.abs(interestingTime - meanTme) / stdTime : 0.0;
+		
+		NormalDistribution d;
+		double result = 0.0;
+		if (stdTime > 0.0) { 
+			d = new NormalDistribution(meanTme, stdTime);
+			result = 1 - d.cumulativeProbability(xn);
+		}
+		// resulting probability, but this is the wrong approach. 
+		
 		// check whether standard border values have been updated in the meantime
 		stmt = QueryBuilder.select().column("sendTime").from("patient_standard_values")
 				.where(QueryBuilder.eq("patid", patid)).and(QueryBuilder.gt("sendTime", time));

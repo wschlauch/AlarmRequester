@@ -68,4 +68,5 @@ temporale Nähe (zeitabstände definierbar)		--check
 Implausible Alarme								--check
 Reaktion auf Alarme								--check
 	-> wenn Alarm beendet, wurde der Patient behandelt oder war es willk�rliches Ende
-	-> wurden die Grenzen angepasst?
+					 
+	-> wurden die Grenzen angepasst?			--check
