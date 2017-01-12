@@ -1,0 +1,45 @@
+\documentclass{scrartcl}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\usepackage{booktabs}
+\usepackage{amssymb}
+\begin{document}
+\title{Fortschrittsbericht für die Abfrage der Datenbank}
+\maketitle
+Die bisherige Implementierung basiert auf Ideen von möglichen KPIs welche von Prof.~Dr.~Rainer Röhrig auf dem Konsortial-Treffen der AlarmRedx Gruppe am 21.10.2016 in Stuttgart-Böblingen genannt wurden. Unter anderem erwähnte der die in der Tabelle~\ref{tab:alarms} aufgeführten KPIs. Dr.~Dirk Hueske-Kraus erwähnte, dass er sich auch ebenso gut eine Option für den Vergleich von Stationen vorstellen könne, welche auf den KPIs basiert.
+
+Die erste Phase der Implementierung bestand on der Patient-Query implementierung, in welcher alle Antworten konsolen-basiert zurück gegeben wurden ohne spezielle Formatierung. Weiterhin war da die Idee des Vergleiches verschiedener Stationen anhand von KPIs noch nicht in den Raum gestellt worden.
+
+In der zweiten Phase, Station-Query und Average-Query, kam dann von Dr.~Hueske-Kraus die Idee, dass man Stationen mit einander vergleichen können sollte. Diese Idee wurde aufgegriffen indem Überblicke über Durchschnittswerte einer Station bezüglich der KPI zurückgeliefert werden. Diese Option war auch ausschlaggebend für die Implementierung der HTML-Idee, d.h., die Antwort wird momentan als eine Tabelle mit den KPI zurück gegeben.
+
+In der dritten Phase (aktuell) wird darüber nachgedacht und damit experimentiert, wie man diese Daten visualisieren kann/könnte, um ein auch für jemanden der Zahlen nicht mag und neu im Beruf ist/einen längerfristigen Überblick benötigt ein klares und schnell verständliches Bild der Station oder von einzelnen Patienten abzugeben.
+\begin{table}
+\centering
+\begin{tabular}{p{5cm}cccc} \toprule
+KPI vs. Querytool & Patient-Query & Station-Query & Average-Query \\ \midrule
+\# Alarme & \checkmark & \checkmark & \checkmark \\ \midrule							 
+\# Alarme/Kategorie 	 & \checkmark & \checkmark & \checkmark \\ \midrule
+\# Situationen & ? & ? & ? \\	 \midrule		
+Therapieanpassung & \checkmark & & \checkmark \\	\midrule					
+Gleichzeitige Alarme & \checkmark & & \checkmark \\	\midrule				
+generell Dauer bis zur Quittierung & \checkmark & & \\ \midrule			
+Dauer bis zur Quittierung spezifischer Alarme	& \checkmark (only time) & & \\ \midrule		
+Alarme bis zur Normalisierung &	\checkmark  & & \\	\midrule 
+Dauer bis zur Normalisierung &	\checkmark & &  \\	\midrule	
+Wo wurden Alarme quittiert & & & \\		\midrule	
+Anzahl Alarme w\"{a}hrend der Stummschaltung & & & \\	\midrule
+Implausible Alarme & & & \checkmark \\\midrule
+temporale N\"{a}he (Zeitabst\"{a}nde definierbar) & & & \checkmark \\	\midrule
+Reaktion auf Alarme	& & & \checkmark \\ \midrule
+wurde der Patient behandelt oder war es willk\"{u}rliches Ende & & & \checkmark \\ \midrule					 
+wurden die Grenzen angepasst & & & \checkmark \\ \bottomrule
+\end{tabular}
+\caption{Fortschritt der einzelnen Pakete.}
+\label{tab:alarms}
+\end{table}
+
+
+
+\end{document}

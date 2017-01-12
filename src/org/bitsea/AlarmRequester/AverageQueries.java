@@ -1,6 +1,7 @@
 package org.bitsea.AlarmRequester;
 
 import java.text.MessageFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -191,7 +192,7 @@ public class AverageQueries {
 		String finalResult = "<table border=2><tr><td>Type</td><td>Mean +/- StD</td><td>Max</td></tr>";
 		if (!severness.isEmpty()) {
 			List<Integer> ls = result.getOrDefault(severness, new LinkedList<Integer>());
-			finalResult = MessageFormat.format("<tr><td>{0}</td><td>{1} +/- {2}</td><td>{3}</td></tr>", severness,
+			finalResult += MessageFormat.format("<tr><td>{0}</td><td>{1} +/- {2}</td><td>{3}</td></tr>", severness,
 					calculateMean(ls), calculateDeviation(ls, null),
 					Collections.max(ls));
 		} else {
@@ -233,22 +234,22 @@ public class AverageQueries {
 		}
 		
 		ResultSet results = session.execute(stmt);
-		String answer = "<table border=2><tr><td>Severness</td><td>Count</td></tr>";
-		
-		// add timestamps to the possibleTime set (?) 
-		// results.forEach(r -> possibleTimes.add(r.getLong("sendTime")));
+		SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");	
+		String answer = "<table border=2><tr><td>Time</td><td>Severness</td><td>Count</td></tr>";
 		
 		// for each timestamp, get simultaneous alarms (i.e. sum over array per person, average over all of these)
 		// do this with a mapping
 		TreeMap<Long, Integer> timeOccMapping = new TreeMap<Long, Integer>();
+		TreeMap<Long, String> timeSevMapping = new TreeMap<Long, String>();
 		for (Row r : results) {
 			long thisTime = r.getLong("sendTime");
 			Map<String, Integer> counter = r.getMap("severness_counter", String.class, Integer.class);
-			counter.forEach((key, value) -> {timeOccMapping.compute(thisTime, (k, v) -> counter.containsKey(k) ? v + counter.get(key) : counter.get(key) );});			
+			counter.forEach((key, value) -> {timeOccMapping.compute(thisTime, (k, v) -> timeOccMapping.containsKey(k) ?  v + counter.get(key) : counter.get(key) );});
+			counter.forEach((key, value) -> {timeSevMapping.compute(thisTime, (k, v) -> v == null ? key : v + ", " + key);});
 		}
 		
 		for (Entry<Long, Integer> e : timeOccMapping.entrySet()) {
-			answer += MessageFormat.format("<tr><td>{0}</td><td>{1}</td></tr>", new Date(e.getKey()), e.getValue());
+			answer += MessageFormat.format("<tr><td>{0}</td><td>{2}</td><td>{1}</td></tr>", format.format(new Date(e.getKey())), e.getValue(), timeSevMapping.get(e.getKey()));
 		}
 		answer += "</table>";
 		return answer;
@@ -324,7 +325,7 @@ public class AverageQueries {
 		Where stmt;
 		typeOfAlarm = typeOfAlarm == null ? "" : typeOfAlarm;
 		
-		String answer = "<table border=2><tr><td>Type</td><td>Mean +/- StD</td><td>Max</td><td>Min</td><td>min DeltaT</td><td>max DeltaT</td></tr>";
+		String answer = "<table border=2><tr><td>Type</td><td>Mean +/- StD</td><td>Min</td><td>Max</td><td>min DeltaT</td><td>max DeltaT</td></tr>";
 		List<List<AlarmDuration>> completeList = new LinkedList<List<AlarmDuration>>();
 		if (patOrStat.equalsIgnoreCase("patient")) {
 			stmt = QueryBuilder.select().column("sendTime").column("reason")
@@ -336,9 +337,9 @@ public class AverageQueries {
 			List<Integer> patients = getPatientsFromStation(id, 0L);
 			for (Integer patid : patients) {
 				stmt = QueryBuilder.select().column("sendTime").column("reason")
-						.from("alarm_information").where(QueryBuilder.eq("patid", id));
+						.from("alarm_information").where(QueryBuilder.eq("patid", patid));
 				ResultSet messages = session.execute(stmt);
-				List<AlarmDuration> l = continousAlarm(patid, messages);
+				List<AlarmDuration> l = continousAlarm((int) patid, messages);
 				completeList.add(l);
 			}
 		}
@@ -352,11 +353,20 @@ public class AverageQueries {
 		
 		// transform
 		HashMap<String, List<long[]>> transformedData = TransformationUtil.transformCloseness(completeList);
+		
 		// apply
-		HashMap<String, double[]> results = apply(transformedData, typeOfAlarm);
+		TreeMap<String, double[]> results = apply(transformedData, typeOfAlarm);
+		
 		// format
+		if (typeOfAlarm.isEmpty()) {
+			double[] r = results.get("all");
+			String tmp = MessageFormat.format("<tr><td>{6}</td><td>{0} +/- {1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr>", r[0], r[1], r[2], r[3], r[4], r[5], "All Alarms");
+			answer += tmp;
+		}
+		
 		for (Entry<String, double[]> e : results.entrySet()) {
-			double [] r = e.getValue();
+			if (e.getKey().equalsIgnoreCase("all")) { continue; }
+			double[] r = e.getValue();
 			String tmp = MessageFormat.format("<tr><td>{6}</td><td>{0} +/- {1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr>", r[0], r[1], r[2], r[3], r[4], r[5], e.getKey());
 			answer += tmp;
 		}
@@ -364,18 +374,23 @@ public class AverageQueries {
 	}
 
 
-	private static HashMap<String, double[]> apply(HashMap<String, List<long[]>> transformedData, String typeOfAlarm) {
-		HashMap<String, double[]> toReturn = new HashMap<String, double[]>();
+	private static TreeMap<String, double[]> apply(HashMap<String, List<long[]>> transformedData, String typeOfAlarm) {
+		TreeMap<String, double[]> toReturn = new TreeMap<String, double[]>();
 		
 		if (!typeOfAlarm.isEmpty()) {
+			try {
 			 List<long[]> tldr = transformedData.get(typeOfAlarm);
 			 double[] tmp = extract(tldr);
 			 toReturn.put(typeOfAlarm, tmp);
+			} catch (NullPointerException c) {
+				// do nothing, should show up empty handed
+			}
 		} else {
 			List<Integer> completeList = new LinkedList<Integer>();
 			for (Entry<String, List<long[]>> e : transformedData.entrySet()) {
 				double[] tmp = extract(e.getValue());
 				toReturn.put(e.getKey(), tmp);
+				e.getValue().forEach((a) -> {completeList.add((int) (a[1] - a[0]));});
 			}
 			double tmp[] = new double[6];
 			tmp[0] = calculateMean(completeList);
@@ -443,19 +458,22 @@ public class AverageQueries {
 				if (borders == null) {continue;}
 				if (toCompare <= 0.5*borders.getFloat(0) || toCompare >= 1.5*borders.getFloat(1)) {
 					overshot.compute(tpl.getKey(), (k, v) -> v == null ? 1 : v+1);
+					reasons.add(tpl.getKey());
 				} else if (toCompare <= borders.getFloat(1) && toCompare >= borders.getFloat(0)) {
 					within.compute(tpl.getKey(), (k, v) -> v == null ? 1 : v+1);
+					reasons.add(tpl.getKey());
 				} else {
 					alarm.compute(tpl.getKey(), (k, v) -> v==null? 1 : v+1);
+					reasons.add(tpl.getKey());
 				}
 			}
 		}
 		
 		// now to display
-		String answer = "<table><tr><td>Alarm</td><td>Within Borders</td><td>Alarm</td><td>Implausible</td></tr>";
+		String answer = "<table border=2><tr><td>Alarm</td><td>Within Borders</td><td>Alarm</td><td>Implausible</td></tr>";
 		for (String reason : reasons) {
 			answer += MessageFormat.format("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td></tr>", 
-					reason, within.get(reason), alarm.get(reason), overshot.get(reason));
+					reason, within.getOrDefault(reason, 0), alarm.getOrDefault(reason, 0), overshot.getOrDefault(reason, 0));
 		}
 		return answer + "</table>";
 	}
@@ -479,7 +497,8 @@ public class AverageQueries {
 	 * variables: timepoint at which the alarm occurred, standard last alarm
 	 * alarmtype, standard all
 	 * 
-	 * reasonable time frame not defined, thus take average time as 50%, each std. above lower, each std below higher
+	 * reasonable time frame not defined, thus take average time as 50%; if alarm stopped within 1std, 
+	 * it can be assumed to be done by personal
 	 */
 	public static String reactionToAlarm(String patOrStat, int id, Object o1, Object o2) {
 		// differentiate the optional Objects into their correct type
@@ -517,7 +536,7 @@ public class AverageQueries {
 		// return the average probability of a reaction, standard deviation, how often did a change occur
 		String answer = "<table border=2><tr><td>Average probability</td><td>Std. deviation</td><td># changes</td></tr>";
 		TupleValue results = calculateTuple(rslts);
-		answer += "<tr><td>" + results.getDouble(0) + "</td><td>" + results.getDouble(1) + "</td><td>" + 
+		answer += "<tr><td>" + Math.round(results.getDouble(0)*100) + "%</td><td>" + Math.round(results.getDouble(1)*100) + "%</td><td>" + 
 				results.getInt(2) + " of " + rslts.size() + "</td></tr></table>";
 		return answer;		
 	}
